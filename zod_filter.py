@@ -3,7 +3,7 @@
 convert zod tiles to enlarge male clipping parts which were too loose for me.
 see https://www.thingiverse.com/thing:2528937
 just give a list of your tiles as command line arguments.
-scales up by 1.35 which is the right value for me.
+scales up by 1.3 which is the right value for me.
 
 this is "scripty" at least. there is absolutely no guarantee that the parts detection
 will work on all possible tiles. be sure to check your results.
@@ -144,7 +144,7 @@ class Stl:
                 extremum[1] = max(coordinate, extremum[1])
             for (coordinate, extremum) in limits.items():
                 size = extremum[1] - extremum[0]
-                if 2.31 <= size <= 2.36:
+                if 2.29 <= size <= 2.36:
                     # male parts have this thickness
                     coordinates = [0.0, 0.0, 0.0]
                     coordinates[scanning] = coordinate
@@ -211,7 +211,7 @@ def main():
         print(len(spots), "parts detected")
         assert spots
         print("scaling up")
-        stl.inflate_parts(spots, 1.35)
+        stl.inflate_parts(spots, 1.3)
         base, extension = splitext(stl_file)
         new_filename = base + "_big_" + extension
         print("saving scaled up model as", new_filename)
