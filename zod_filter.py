@@ -16,69 +16,27 @@ from sys import argv
 from itertools import permutations
 import struct
 from collections import defaultdict
-from math import sqrt
 
-class Point:
+def inflate_point(point, spots, factor):
     """
-    point in space.
+    inflate given point by given factor if around a spot.
     """
-    def __init__(self, coordinates):
-        """
-        build new point using an array of coordinates.
-        """
-        self.coordinates = coordinates
+    for spot in spots:
+        near_spot = True
+        for index, coordinates in enumerate(zip(point, spot[0])):
+            if index != spot[1]:
+                if abs(coordinates[0] - coordinates[1]) > 2.9:
+                    near_spot = False
+                    break
 
-    def inflate_parts(self, spots, factor):
-        """
-        inflate each point around each spot by given factor.
-        """
-        for spot in spots:
-            near_spot = True
-            for index, coordinates in enumerate(zip(self.coordinates, spot[0].coordinates)):
+        if near_spot:
+            for index, coordinates in enumerate(zip(point, spot[0])):
                 if index != spot[1]:
-                    if abs(coordinates[0] - coordinates[1]) > 2.9:
-                        near_spot = False
-                        break
-            if near_spot:
-                for index, coordinates in enumerate(zip(self.coordinates, spot[0].coordinates)):
-                    if index != spot[1]:
-                        self.coordinates[index] = (coordinates[0] - coordinates[1]) *\
-                                factor + coordinates[1]
-                return True
-        return False
+                    point[index] = (coordinates[0] - coordinates[1]) *\
+                            factor + coordinates[1]
+            return True
 
-    def __add__(self, other):
-        """
-        addition operator. (useful for translations)
-        """
-        return Point([i + j
-                      for i, j in zip(self.coordinates, other.coordinates)])
-
-    def __sub__(self, other):
-        """
-        substraction operator. (useful for translations)
-        """
-        return Point([i - j
-                      for i, j in zip(self.coordinates, other.coordinates)])
-
-    def __mul__(self, factor):
-        """
-        multiplication by scalar operator. (useful for scaling)
-        """
-        return Point([c*factor for c in self.coordinates])
-
-    def __truediv__(self, factor):
-        """
-        division by scalar operator. (useful for scaling)
-        """
-        return Point([c/factor for c in self.coordinates])
-
-    def scalar_product(self, other):
-        """
-        scalar (dot) product between two vectors
-        """
-        return sum([c1*c2
-                    for c1, c2 in zip(self.coordinates, other.coordinates)])
+    return False
 
 class Facet:
     """
@@ -90,29 +48,14 @@ class Facet:
 
     def inflate_parts(self, spots, factor):
         for point in self.points:
-            if point.inflate_parts(spots, factor):
+            if inflate_point(point, spots, factor):
                 self.colored = True
-
-    def normal(self):
-        """
-        return normal vector
-        """
-        center = sum(self.points, Point([0.0, 0.0, 0.0]))/3
-        u1 = self.points[0] - center
-        u2 = self.points[1] - center
-        normal = Point([
-            u1.coordinates[1]*u2.coordinates[2] - u1.coordinates[2]*u2.coordinates[1],
-            u1.coordinates[2]*u2.coordinates[0] - u1.coordinates[0]*u2.coordinates[2],
-            u1.coordinates[0]*u2.coordinates[1] - u1.coordinates[1]*u2.coordinates[0],
-            ])
-        norm = sqrt(normal.scalar_product(normal))
-        return normal / norm
 
 def binary_facet(all_coordinates):
     """
     parses a facet in a binary stl file.
     """
-    return Facet([Point(list(all_coordinates[3+3*i:6+3*i])) for i in range(3)])
+    return Facet([list(all_coordinates[3+3*i:6+3*i]) for i in range(3)])
 
 
 class Stl:
@@ -144,8 +87,8 @@ class Stl:
             limits = defaultdict(lambda: [float("inf"), float("-inf")])
             free_dimension = next(d for d in range(3) if d != scanning and d != slicing)
             for point in self.points():
-                coordinate = point.coordinates[slicing]
-                key = round(point.coordinates[scanning]*20.0)/20.0
+                coordinate = point[slicing]
+                key = round(point[scanning]*20.0)/20.0
                 extremum = limits[key]
                 extremum[0] = min(coordinate, extremum[0])
                 extremum[1] = max(coordinate, extremum[1])
@@ -156,7 +99,7 @@ class Stl:
                     coordinates = [0.0, 0.0, 0.0]
                     coordinates[scanning] = coordinate
                     coordinates[slicing] = (extremum[0]+extremum[1])/2.0
-                    spots.append((Point(coordinates), free_dimension))
+                    spots.append((coordinates, free_dimension))
 
         return spots
 
@@ -182,7 +125,11 @@ class Stl:
             for _ in range(size):
                 data = stl_file.read(4*3*4+2)
                 #  for each facet : 4 vectors of 3 floats + 2 unused bytes
-                fields = facet_struct.unpack(data)
+                try:
+                    fields = facet_struct.unpack(data)
+                except:
+                    print("warning: invalid stl file")
+                    return
                 new_facet = binary_facet(fields)
                 self.facets.append(new_facet)
 
@@ -201,10 +148,10 @@ class Stl:
                 color = red if facet.colored else blue
                 stl_file.write(
                     facet_struct.pack(
-                        *facet.normal().coordinates,
-                        *facet.points[0].coordinates,
-                        *facet.points[1].coordinates,
-                        *facet.points[2].coordinates,
+                        0, 0, 0,
+                        *facet.points[0],
+                        *facet.points[1],
+                        *facet.points[2],
                         color,)
                     )
 
@@ -218,7 +165,6 @@ def main():
         stl = Stl(stl_file)
         print("detecting parts to scale up")
         spots = stl.detect_parts()
-        print(len(spots), "parts detected")
         if spots:
             print("scaling up")
             stl.inflate_parts(spots, 1.15)
@@ -226,6 +172,6 @@ def main():
             new_filename = base + "_big_" + extension
             print("saving scaled up model as", new_filename)
             stl.save_binary_stl(new_filename)
-            print("done")
+        print("done")
 
 main()
