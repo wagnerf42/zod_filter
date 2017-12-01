@@ -44,7 +44,8 @@ class Point:
                     if index != spot[1]:
                         self.coordinates[index] = (coordinates[0] - coordinates[1]) *\
                                 factor + coordinates[1]
-                return
+                return True
+        return False
 
     def __add__(self, other):
         """
@@ -85,6 +86,12 @@ class Facet:
     """
     def __init__(self, points):
         self.points = points
+        self.colored = False
+
+    def inflate_parts(self, spots, factor):
+        for point in self.points:
+            if point.inflate_parts(spots, factor):
+                self.colored = True
 
     def normal(self):
         """
@@ -157,8 +164,8 @@ class Stl:
         """
         any point neat a spot gets scaled by given factor.
         """
-        for point in self.points():
-            point.inflate_parts(spots, factor)
+        for facet in self.facets:
+            facet.inflate_parts(spots, factor)
 
     def parse_binary_stl(self, file_name):
         """
@@ -187,15 +194,18 @@ class Stl:
             stl_file.write(b"\0"*80)
             size_struct = struct.Struct('I')
             stl_file.write(size_struct.pack(len(self.facets)))
-            facet_struct = struct.Struct('12fh')
+            facet_struct = struct.Struct('12fH')
+            red = 63489
+            blue = 14185
             for facet in self.facets:
+                color = red if facet.colored else blue
                 stl_file.write(
                     facet_struct.pack(
                         *facet.normal().coordinates,
                         *facet.points[0].coordinates,
                         *facet.points[1].coordinates,
                         *facet.points[2].coordinates,
-                        0,)
+                        color,)
                     )
 
 def main():
